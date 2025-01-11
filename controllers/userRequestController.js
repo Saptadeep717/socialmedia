@@ -5,7 +5,8 @@ const FriendRequest = require("../models/request.model");
 exports.sendFriendRequest = async (req, res) => {
   const { receiverId } = req.body;
   const senderId = req.user.id;
-
+  console.log("senderId",senderId);
+  console.log("receiverId",receiverId);
   try {
     const sender = await User.findById(senderId);
     const receiver = await User.findById(receiverId);
@@ -177,6 +178,27 @@ exports.getRecommendations = async (req, res) => {
       "name location interests"
     );
 
+    const friendRequests = await FriendRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+    });
+
+    // Collect IDs of users involved in pending friend requests
+    const pendingRequestIds = friendRequests
+      .filter((req) => req.status === "pending")
+      .map((req) =>
+        req.sender.toString() === userId
+          ? req.receiver.toString()
+          : req.sender.toString()
+      );
+    // Collect IDs of users involved in pending friend requests
+    const declinedRequestIds = friendRequests
+      .filter((req) => req.status === "declined")
+      .map((req) =>
+        req.sender.toString() === userId
+          ? req.receiver.toString()
+          : req.sender.toString()
+      );
+
     // Function to calculate recommendation score
     const calculateRecommendationScore = (targetUser) => {
       let score = 0;
@@ -187,7 +209,7 @@ exports.getRecommendations = async (req, res) => {
           (userFriend) => userFriend.id.toString() === friend.id.toString()
         )
       );
-       
+
       score += mutualFriends.length; // Increase score by the number of mutual friends
 
       // Check if they share the same location
@@ -200,19 +222,31 @@ exports.getRecommendations = async (req, res) => {
       }
 
       // Check if they share any common interests
-     const commonInterests = targetUser.interests.filter((interest) =>
-       user.interests.some(
-         (userInterest) => userInterest.toLowerCase() === interest.toLowerCase()
-       )
-     );
+      const commonInterests = targetUser.interests.filter((interest) =>
+        user.interests.some(
+          (userInterest) =>
+            userInterest.toLowerCase() === interest.toLowerCase()
+        )
+      );
       score += commonInterests.length; // Increase score by the number of common interests
+       if (declinedRequestIds.includes(targetUser.id.toString())) {
+         score -= 1000; // Apply a large penalty to push them to the bottom
+       }
+
 
       return score;
     };
 
     // Map users to their recommendation score and sort them based on the score
     const recommendations = allUsers
-      .filter((u) => u.id !== userId) // Exclude the current user
+      .filter(
+        (u) =>
+          u.id !== userId &&
+          !user.friends.some(
+            (friend) => friend.id.toString() === u.id.toString()
+          ) &&
+          !pendingRequestIds.includes(u.id)
+      ) // Exclude the current user
       .map((u) => {
         u.password = undefined;
         const score = calculateRecommendationScore(u);

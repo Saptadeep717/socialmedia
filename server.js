@@ -4,6 +4,7 @@ const authRoutes = require("./routes/authRoutes.js");
 const userRoutes = require("./routes/userReqRoutes.js");
 const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
+const cors = require("cors");
 
 
 dotenv.config();
@@ -17,6 +18,13 @@ connectDB();
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
 // Routes
 app.use("/api/v1/auth", authRoutes);
